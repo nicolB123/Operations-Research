@@ -1,0 +1,55 @@
+from ortools.linear_solver import pywraplp
+
+
+def solve_lp(constraints_to_add=None):
+    """A helper function to solve the LP with an optional list of new constraints."""
+    solver = pywraplp.Solver.CreateSolver('GLOP')
+
+    # 1. Define variables (as continuous for the LP relaxation)
+    x1 = solver.NumVar(0, solver.infinity(), 'x1')
+    x2 = solver.NumVar(0, solver.infinity(), 'x2')
+
+    # 2. Add original constraints
+    solver.Add(x2 <= 3)
+    solver.Add(2 * x1 + 3 * x2 <= 12)
+
+    # Add any new cutting planes
+    if constraints_to_add:
+        for cut in constraints_to_add:
+            solver.Add(cut(x1, x2))
+
+    # 3. Define the objective function
+    solver.Maximize(x1 + 2 * x2)
+
+    # 4. Solve and print
+    status = solver.Solve()
+    if status == pywraplp.Solver.OPTIMAL:
+        print(f"Objective value = {solver.Objective().Value():.4f}")
+        print(f"x1 = {x1.solution_value():.4f}")
+        print(f"x2 = {x2.solution_value():.4f}")
+        return x1.solution_value(), x2.solution_value()
+    else:
+        print("The problem does not have an optimal solution.")
+        return None, None
+
+
+if __name__ == '__main__':
+    # --- Iteration 1 ---
+    print(" Iteration 1: Solving the initial LP Relaxation")
+    x1_sol, x2_sol = solve_lp()
+
+    # Cutting plane (manually derived): 1*x1 + 2*x2 <= 7
+
+    # --- Iteration 2 ---
+    print("\n Iteration 2: Adding the Gomory Cut and Re-solving")
+
+    # Define the cut x1 + 2*x2 <= 7 as a lambda function
+    first_cut = lambda x1, x2: x1 + 2 * x2 <= 7
+    all_cuts = [first_cut]
+
+    x1_sol, x2_sol = solve_lp(all_cuts)
+
+    # Check for integrality
+    TOLERANCE = 1e-6
+    if abs(x1_sol - round(x1_sol)) < TOLERANCE and abs(x2_sol - round(x2_sol)) < TOLERANCE:
+        print("\n Solution is now all-integer. The algorithm terminates.")
