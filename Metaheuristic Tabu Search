@@ -1,0 +1,110 @@
+import pandas as pd
+
+# --- 1. Problem Data ---
+items_data = {
+    'A': {'utility': 9, 'weight': 6},
+    'B': {'utility': 10, 'weight': 7},
+    'C': {'utility': 14, 'weight': 5},
+    'D': {'utility': 11, 'weight': 8},
+    'E': {'utility': 8, 'weight': 5},
+    'F': {'utility': 3, 'weight': 3},
+}
+# Create an ordered list for consistent indexing
+items = list(items_data.values())
+item_names = list(items_data.keys())
+KNAPSACK_CAPACITY = 20
+
+
+# --- 2. Helper Functions ---
+def calculate_properties(solution):
+    """Calculates total utility and weight for a solution vector."""
+    total_utility = sum(items[i]['utility'] for i, taken in enumerate(solution) if taken)
+    total_weight = sum(items[i]['weight'] for i, taken in enumerate(solution) if taken)
+    return total_utility, total_weight
+
+
+def solution_to_string(solution):
+    """Converts a solution vector to a readable string of item names."""
+    taken_items = [item_names[i] for i, taken in enumerate(solution) if taken]
+    return ", ".join(taken_items) if taken_items else "None"
+
+
+# --- 3. Tabu Search Algorithm ---
+def tabu_search():
+
+    print("Tabu Search for Knapsack Problem")
+
+    # --- Parameters ---
+    initial_solution = [0, 0, 1, 1, 1, 0]  # {C, D, E}
+    tabu_tenure = 1
+    max_iterations = 5
+
+    # --- Initialization ---
+    current_solution = initial_solution
+    best_solution = current_solution
+    best_utility, _ = calculate_properties(best_solution)
+
+    tabu_list = {}  # Using a dict: {solution_tuple: expires_at_iteration}
+
+    # --- Main Loop ---
+    for i in range(1, max_iterations + 1):
+        current_utility, current_weight = calculate_properties(current_solution)
+
+        # Add the current solution to the tabu list
+        # We store the iteration number WHEN IT BECOMES NON-TABU
+        tabu_list[tuple(current_solution)] = i + tabu_tenure
+
+        print(f"\n--- Iteration {i} ---")
+        print(
+            f"Current Solution: {{{solution_to_string(current_solution)}}}, Utility: {current_utility}, Weight: {current_weight}")
+        print(f"Best Utility So Far: {best_utility}")
+
+        best_neighbor = None
+        best_neighbor_utility = -1
+
+        # Explore the neighborhood (all single-bit flips)
+        for item_idx in range(len(items)):
+            neighbor = list(current_solution)
+            neighbor[item_idx] = 1 - neighbor[item_idx]  # Flip bit
+            neighbor_tuple = tuple(neighbor)
+
+            # Check if the neighbor is tabu
+            if neighbor_tuple in tabu_list and tabu_list[neighbor_tuple] >= i:
+                continue  # Skip tabu solutions
+
+            # Check if the neighbor is valid (does not exceed capacity)
+            neighbor_utility, neighbor_weight = calculate_properties(neighbor)
+            if neighbor_weight <= KNAPSACK_CAPACITY:
+                # Find the best valid, non-tabu neighbor
+                if neighbor_utility > best_neighbor_utility:
+                    best_neighbor = neighbor
+                    best_neighbor_utility = neighbor_utility
+
+        # Move to the best neighbor found, even if it's not improving
+        if best_neighbor is None:
+            print("No admissible neighbors found. Search stuck.")
+            break
+
+        current_solution = best_neighbor
+
+        # Update the overall best solution if the new one is better
+        if best_neighbor_utility > best_utility:
+            best_solution = best_neighbor
+            best_utility = best_neighbor_utility
+
+        # Clean up expired entries from tabu list for display
+        active_tabu_str = {sol_str: expiry for sol, expiry in tabu_list.items() if expiry >= i
+                           for sol_str in [f"{{{solution_to_string(sol)}}}"]}
+        print(f"Tabu List: {active_tabu_str}")
+
+    # --- Final Result ---
+    print("\n\n--- Tabu Search Finished After 5 Iterations ---")
+    final_utility, final_weight = calculate_properties(best_solution)
+    print(f" Best Solution Found: {{{solution_to_string(best_solution)}}}")
+    print(f"Total Utility: {final_utility}")
+    print(f"Total Weight: {final_weight}")
+
+
+
+if __name__ == "__main__":
+    tabu_search()
