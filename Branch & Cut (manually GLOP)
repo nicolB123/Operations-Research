@@ -1,0 +1,89 @@
+from ortools.linear_solver import pywraplp
+
+
+# Helper function to solve the LP for any given subproblem
+def solve_subproblem(extra_constraints):
+    solver = pywraplp.Solver.CreateSolver('GLOP')
+
+    # Define variables as continuous (it's always an LP relaxation)
+    x1 = solver.NumVar(0, solver.infinity(), 'x1')
+    x2 = solver.NumVar(0, solver.infinity(), 'x2')
+
+    # Original constraints
+    solver.Add(6 * x1 + 8 * x2 <= 48)
+    solver.Add(3 * x1 + 9 * x2 <= 27)
+
+    # Add constraints from cuts or branching
+    for const in extra_constraints:
+        const(solver, x1, x2)  # Apply the constraint
+
+    # Objective
+    solver.Maximize(3 * x1 + 5 * x2)
+    status = solver.Solve()
+
+    if status == pywraplp.Solver.OPTIMAL:
+        return {
+            'status': 'OPTIMAL',
+            'obj_val': solver.Objective().Value(),
+            'x1': x1.solution_value(),
+            'x2': x2.solution_value()
+        }
+    return {'status': 'INFEASIBLE'}
+
+
+if __name__ == '__main__':
+    # --- Main Logic ---
+    print(" Step 3: Re-solving the LP with the new Gomory cut")
+    # Define the new cut as a lambda function
+    gomory_cut = lambda s, x1, x2: s.Add(2 * x1 + 3 * x2 <= 16)
+    constraints_after_cut = [gomory_cut]
+
+    result_after_cut = solve_subproblem(constraints_after_cut)
+    print(
+        f" -> Result: Objective={result_after_cut['obj_val']:.2f}, x1={result_after_cut['x1']:.2f}, x2={result_after_cut['x2']:.2f}")
+
+    # --- Branching Logic ---
+    best_solution = None
+    best_obj_val = -float('inf')
+
+    print("\n Step 4 & 5: Branching on x2 and solving subproblems")
+
+    # --- Left Branch (x2 <= 0) ---
+    print("\n--- Exploring Left Branch (x2 <= 0) ---")
+    branch_left_constraint = lambda s, x1, x2: s.Add(x2 <= 0)
+    constraints_left = constraints_after_cut + [branch_left_constraint]
+    result_left = solve_subproblem(constraints_left)
+
+    if result_left['status'] == 'OPTIMAL':
+        print(
+            f" -> Found integer solution: Obj={result_left['obj_val']:.2f}, x1={result_left['x1']:.0f}, x2={result_left['x2']:.0f}")
+        if result_left['obj_val'] > best_obj_val:
+            best_obj_val = result_left['obj_val']
+            best_solution = (result_left['x1'], result_left['x2'])
+            print("    -> This is the new best solution!")
+
+    # --- Right Branch (x2 >= 1) ---
+    print("\n--- Exploring Right Branch (x2 >= 1) ---")
+    # We can prune this branch if its LP bound is worse than our best integer solution
+    if result_after_cut['obj_val'] < best_obj_val:
+        print(
+            f" -> Pruning this branch, its bound {result_after_cut['obj_val']:.2f} is worse than best solution {best_obj_val:.2f}")
+    else:
+        branch_right_constraint = lambda s, x1, x2: s.Add(x2 >= 1)
+        constraints_right = constraints_after_cut + [branch_right_constraint]
+        result_right = solve_subproblem(constraints_right)
+
+        if result_right['status'] == 'OPTIMAL':
+            print(
+                f" -> Found integer solution: Obj={result_right['obj_val']:.2f}, x1={result_right['x1']:.0f}, x2={result_right['x2']:.0f}")
+            if result_right['obj_val'] > best_obj_val:
+                best_obj_val = result_right['obj_val']
+                best_solution = (result_right['x1'], result_right['x2'])
+                print("    -> This is the new best solution!")
+            else:
+                print(f"    -> Solution is worse than current best ({best_obj_val:.2f}).")
+
+    # --- Final Result ---
+    print("\n\n## --- Branch and Cut Finished --- ##")
+    print(f" Optimal integer solution found: x1 = {best_solution[0]:.0f}, x2 = {best_solution[1]:.0f}")
+    print(f"Maximum Objective Value = {best_obj_val:.2f}")
