@@ -1,0 +1,143 @@
+def solve_csp_backtracking():
+    
+    domains = {
+        'x': [1, 2, 3, 4],
+        'y': [1, 2, 4],
+        'z': [4, 5, 6, 7]
+    }
+    variables = ['x', 'y', 'z']
+
+    def is_consistent(assignment):
+        # This function checks if a partial or full assignment is valid.
+        x, y, z = assignment.get('x'), assignment.get('y'), assignment.get('z')
+
+        # Check y > x and y != x
+        if x is not None and y is not None:
+            if not (y > x): return False # Also covers y != x
+
+        # Check x != z
+        if x is not None and z is not None:
+            if not (x != z): return False
+
+        # Check x + y = z
+        if x is not None and y is not None and z is not None:
+            if not (x + y == z): return False
+
+        return True
+
+    def backtrack(assignment={}):
+        # Base case: if assignment is complete, we found a solution.
+        if len(assignment) == len(variables):
+            return assignment
+
+        # Select the next unassigned variable
+        var = next(v for v in variables if v not in assignment)
+
+        # Try all values in the variable's domain
+        for value in domains[var]:
+            new_assignment = assignment.copy()
+            new_assignment[var] = value
+
+            if is_consistent(new_assignment):
+                result = backtrack(new_assignment)
+                if result is not None:
+                    return result # Solution found, pass it up
+
+        return None # No solution found from this path
+
+    solution = backtrack()
+    return solution
+
+if __name__ == '__main__':
+    # --- Run the standard backtracking solver ---
+    solution_bt = solve_csp_backtracking()
+    print(" 1. Standard Backtracking Solution")
+    if solution_bt:
+        print(f" Solution found: {solution_bt}")
+    else:
+        print(" No solution found.")
+
+
+#-------------------------------------------------------------------------------#
+# With Forward Checking:
+
+import copy
+
+def solve_csp_forward_checking():
+   
+    initial_domains = {
+        'x': [1, 2, 3, 4],
+        'y': [1, 2, 4],
+        'z': [4, 5, 6, 7]
+    }
+    variables = ['x', 'y', 'z']
+
+    def prune_domains(var, value, domains):
+
+        pruned_domains = copy.deepcopy(domains)
+
+        # When a variable is assigned, its domain becomes just that value
+        pruned_domains[var] = [value]
+
+        # --- Forward Checking Logic ---
+        # When x is assigned, prune y and z
+        if var == 'x':
+            # Prune y's domain: remove values where y <= x
+            pruned_domains['y'] = [val_y for val_y in pruned_domains['y'] if val_y > value]
+            # Prune z's domain: remove values where z == x
+            pruned_domains['z'] = [val_z for val_z in pruned_domains['z'] if val_z != value]
+
+        # When y is assigned, prune x and z
+        elif var == 'y':
+            # Prune x's domain: remove values where x >= y
+            pruned_domains['x'] = [val_x for val_x in pruned_domains['x'] if value > val_x]
+
+        # When x and y are assigned, we can drastically prune z's domain
+        if 'x' in domains and len(domains['x']) == 1 and 'y' in domains and len(domains['y']) == 1:
+            x_val, y_val = domains['x'][0], domains['y'][0]
+            required_z = x_val + y_val
+            pruned_domains['z'] = [val_z for val_z in pruned_domains['z'] if val_z == required_z]
+
+        # Check if any domain has become empty
+        for d in pruned_domains.values():
+            if not d:
+                return None  # Pruning led to failure
+
+        return pruned_domains
+
+    def backtrack_fc(assignment, domains):
+        if len(assignment) == len(variables):
+            return assignment
+
+        var = next(v for v in variables if v not in assignment)
+
+        for value in domains[var]:
+            new_assignment = assignment.copy()
+            new_assignment[var] = value
+
+            print(f"-> Trying {var} = {value}. Current domains: {domains}")
+
+            # Perform forward checking
+            pruned_domains = prune_domains(var, value, domains)
+
+            if pruned_domains:
+                print(f"   Domains after pruning: {pruned_domains}\n")
+                result = backtrack_fc(new_assignment, pruned_domains)
+                if result is not None:
+                    return result
+            else:
+                print(f"   Pruning failed for {var} = {value}. Backtracking...\n")
+
+        return None
+
+    solution = backtrack_fc({}, initial_domains)
+    return solution
+
+if __name__ == '__main__':
+    # --- Run the forward checking solver ---
+    print("\n 2. Backtracking with Forward Checking Solution")
+    solution_fc = solve_csp_forward_checking()
+    if solution_fc:
+        print(f"\n Solution found: {solution_fc}")
+    else:
+        print("\n No solution found.")
