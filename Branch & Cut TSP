@@ -1,5 +1,4 @@
 from ortools.linear_solver import pywraplp
-from optimization import solve_integer_program
 
 
 if __name__ == '__main__':
