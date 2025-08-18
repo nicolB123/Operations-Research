@@ -1,0 +1,51 @@
+from ortools.linear_solver import pywraplp
+
+
+def solve_lp_problem():
+
+    # Create the solver using the SCIP backend.
+    solver = pywraplp.Solver.CreateSolver('SCIP')
+    if not solver:
+        print("SCIP solver not available.")
+        return
+
+    # 1. Define the variables
+    # x1 >= 0 and x2 >= 0
+    infinity = solver.infinity()
+    x1 = solver.NumVar(0.0, infinity, 'x1')
+    x2 = solver.NumVar(0.0, infinity, 'x2')
+
+    print(f'Number of variables = {solver.NumVariables()}')
+
+    # 2. Define the constraints
+    # 2*x1 + 2*x2 <= 16
+    solver.Add(2 * x1 + 2 * x2 <= 16)
+
+    # -2*x1 - x2 >= -12
+    solver.Add(-2 * x1 - x2 >= -12)
+
+    # 2*x1 + 3*x2 <= 18
+    solver.Add(2 * x1 + 3 * x2 <= 18)
+
+    print(f'Number of constraints = {solver.NumConstraints()}')
+
+    # 3. Define the objective function
+    # Minimize F(x) = -20*x1 - 15*x2
+    solver.Minimize(-20 * x1 - 15 * x2)
+
+    # 4. Solve the system
+    print('Solving the linear programming problem...')
+    status = solver.Solve()
+
+    # 5. Print the solution
+    if status == pywraplp.Solver.OPTIMAL:
+        print('Solution:')
+        print(f'Objective value F(x) = {solver.Objective().Value():.2f}')
+        print(f'x1 = {x1.solution_value():.2f}')
+        print(f'x2 = {x2.solution_value():.2f}')
+    else:
+        print('The problem does not have an optimal solution.')
+
+
+if __name__ == '__main__':
+    solve_lp_problem()
