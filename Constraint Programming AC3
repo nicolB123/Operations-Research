@@ -1,0 +1,96 @@
+from collections import deque
+
+
+def ac3_solver(domains, constraints):
+    """
+    Solves a CSP by enforcing arc consistency using the AC-3 algorithm.
+
+    Args:
+        domains (dict): A dictionary mapping variable names to their list of possible values.
+        constraints (dict): A dictionary mapping variables to a list of their binary constraints.
+                            Each constraint is a tuple: (neighbor, function).
+
+    Returns:
+        A tuple (bool, dict):
+        - True if the CSP is arc-consistent, False if an inconsistency is found.
+        - The dictionary of final (pruned) domains.
+    """
+    # 1. Initialize the queue with all arcs from the problem
+    queue = deque()
+    for var in domains:
+        for neighbor, _ in constraints[var]:
+            queue.append((var, neighbor))
+
+    print(f"Initial domains: {domains}")
+    print(f"Initial queue: {list(queue)}\n")
+
+    # 2. The AC-3 Algorithm Loop
+    while queue:
+        xi, xj = queue.popleft()
+        print(f"-> Revising arc ({xi}, {xj})...")
+
+        # If we revise the domain of Xi, we need to re-check its neighbors
+        if revise(xi, xj, domains, constraints):
+            # Check for failure (empty domain)
+            if not domains[xi]:
+                print("\n--- INCONSISTENCY FOUND ---")
+                print(f"Domain of {xi} became empty.")
+                return False, domains
+
+            # Add all arcs pointing to xi back to the queue to propagate the change
+            for xk, _ in constraints[xi]:
+                if xk != xj:
+                    queue.append((xk, xi))
+                    print(f"   -> Domain of {xi} changed, adding arc ({xk}, {xi}) to queue.")
+
+    print("\n--- ARC CONSISTENCY ACHIEVED ---")
+    return True, domains
+
+
+def revise(xi, xj, domains, constraints):
+    """
+    Helper function for AC-3. Makes arc (xi, xj) consistent.
+    Returns True if the domain of xi was revised, False otherwise.
+    """
+    revised = False
+    constraint_func = next(func for neighbor, func in constraints[xi] if neighbor == xj)
+
+    # Iterate over a copy of the domain list as we might modify the original
+    for val_i in list(domains[xi]):
+        # Check if there is any value in Dj that satisfies the constraint with val_i
+        has_support = any(constraint_func(val_i, val_j) for val_j in domains[xj])
+
+        if not has_support:
+            domains[xi].remove(val_i)
+            revised = True
+            print(f"   - Revising D({xi}): Removed value {val_i}. New domain: {domains[xi]}")
+
+    return revised
+
+
+
+if __name__ == "__main__":
+    initial_domains = {
+        'x': [1, 2, 3, 4],
+        'y': [1, 2, 3, 4],
+        'z': [2, 3, 4]
+    }
+
+    # Define constraints as lambda functions for both directions of an arc
+    # For a constraint between X and Y, we need a function for (X,Y) and one for (Y,X)
+    constraints = {
+        'x': [('y', lambda x, y: x + y == 4)],
+        'y': [
+            ('x', lambda y, x: y + x == 4),
+            ('z', lambda y, z: y > z)
+        ],
+        'z': [('y', lambda z, y: z < y)]
+    }
+
+    # --- Run the AC-3 Solver ---
+    is_consistent, final_domains = ac3_solver(initial_domains, constraints)
+
+    if is_consistent:
+        print("\nFinal consistent domains:")
+        for var, domain in final_domains.items():
+            print(f"  {var}: {domain}")
