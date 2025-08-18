@@ -5,7 +5,6 @@ from optimization import solve_integer_program
 if __name__ == '__main__':
 
 
-    # solve_integer_program()
 
     # Create the linear solver with the GLOP backend.
     solver = pywraplp.Solver.CreateSolver('GLOP')
