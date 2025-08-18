@@ -1,0 +1,126 @@
+import pandas as pd
+
+# --- 1. Problem Data ---
+items_data = {
+    'A': {'utility': 9, 'weight': 6},
+    'B': {'utility': 10, 'weight': 7},
+    'C': {'utility': 14, 'weight': 5},
+    'D': {'utility': 11, 'weight': 8},
+    'E': {'utility': 8, 'weight': 5},
+    'F': {'utility': 3, 'weight': 3},
+}
+# Create an ordered list of items for consistent indexing
+items = list(items_data.values())
+item_names = list(items_data.keys())
+KNAPSACK_CAPACITY = 20
+
+# --- 2. Helper Functions ---
+def calculate_properties(solution):
+    """Calculates total utility and weight for a given solution vector."""
+    total_utility = sum(items[i]['utility'] for i, taken in enumerate(solution) if taken)
+    total_weight = sum(items[i]['weight'] for i, taken in enumerate(solution) if taken)
+    return total_utility, total_weight
+
+def solution_to_string(solution):
+    """Converts a solution vector to a readable string of item names."""
+    taken_items = [item_names[i] for i, taken in enumerate(solution) if taken]
+    return ", ".join(taken_items) if taken_items else "None"
+
+
+def local_search_first_fit():
+
+    print(" Local Search with First-Fit Strategy")
+
+    # Initial solution: Only item E is taken
+    current_solution = [0, 0, 0, 0, 1, 0]
+
+    iteration = 0
+    while True:
+        current_utility, current_weight = calculate_properties(current_solution)
+
+        print(f"\n--- Iteration {iteration} ---")
+        print(f"Current Solution: {{{solution_to_string(current_solution)}}}")
+        print(f"Current Utility: {current_utility}, Current Weight: {current_weight}")
+
+        improvement_found = False
+
+        # Explore neighborhood in alphanumeric order (A -> F)
+        for i in range(len(items)):
+            # Create a neighbor by flipping one bit
+            neighbor = list(current_solution)
+            neighbor[i] = 1 - neighbor[i]  # Flip 0 to 1 or 1 to 0
+
+            neighbor_utility, neighbor_weight = calculate_properties(neighbor)
+
+            # Check for validity and improvement
+            if neighbor_weight <= KNAPSACK_CAPACITY and neighbor_utility > current_utility:
+                print(f"Found improving neighbor by changing item {item_names[i]}.")
+                print(f"Moving to new solution with Utility: {neighbor_utility}, Weight: {neighbor_weight}")
+
+                current_solution = neighbor
+                improvement_found = True
+                break  # Move to the first better neighbor found
+
+        iteration += 1
+
+        # If no improvement was found after checking all neighbors, stop.
+        if not improvement_found:
+            print("\nNo further improvement found. Local optimum reached.")
+            break
+
+    print("\n--- Final Solution (First-Fit) ---")
+    final_utility, final_weight = calculate_properties(current_solution)
+    print(f"Items in Knapsack: {{{solution_to_string(current_solution)}}}")
+    print(f"Total Utility: {final_utility}")
+    print(f"Total Weight: {final_weight}")
+
+
+def local_search_best_fit():
+    
+    print("\n\n Local Search with Best-Fit Strategy")
+
+    # Initial solution: Only item E is taken
+    current_solution = [0, 0, 0, 0, 1, 0]
+
+    iteration = 0
+    while True:
+        current_utility, current_weight = calculate_properties(current_solution)
+
+        print(f"\n--- Iteration {iteration} ---")
+        print(f"Current Solution: {{{solution_to_string(current_solution)}}}")
+        print(f"Current Utility: {current_utility}, Current Weight: {current_weight}")
+
+        best_neighbor = None
+        best_neighbor_utility = current_utility
+
+        # Explore the entire neighborhood
+        for i in range(len(items)):
+            neighbor = list(current_solution)
+            neighbor[i] = 1 - neighbor[i]  # Flip bit
+
+            neighbor_utility, neighbor_weight = calculate_properties(neighbor)
+
+            # Check for validity and if it's the best improvement so far
+            if neighbor_weight <= KNAPSACK_CAPACITY and neighbor_utility > best_neighbor_utility:
+                best_neighbor = neighbor
+                best_neighbor_utility = neighbor_utility
+
+        # If a better neighbor was found, move to it. Otherwise, stop.
+        if best_neighbor:
+            print(f"Found best neighbor. Moving to new solution with Utility: {best_neighbor_utility}")
+            current_solution = best_neighbor
+        else:
+            print("\nNo further improvement found. Local optimum reached.")
+            break
+
+        iteration += 1
+
+    print("\n--- Final Solution (Best-Fit) ---")
+    final_utility, final_weight = calculate_properties(current_solution)
+    print(f"Items in Knapsack: {{{solution_to_string(current_solution)}}}")
+    print(f"Total Utility: {final_utility}")
+    print(f"Total Weight: {final_weight}")
+
+if __name__ == "__main__":
+    local_search_first_fit()
+    local_search_best_fit()
