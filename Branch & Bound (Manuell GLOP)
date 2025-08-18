@@ -1,0 +1,143 @@
+import math
+from ortools.linear_solver import pywraplp
+
+
+def solve_lp_relaxation(branching_constraints):
+    
+    # Create the linear solver with the GLOP backend.
+    solver = pywraplp.Solver.CreateSolver('GLOP')
+
+    infinity = solver.infinity()
+
+    # Define ALL variables as continuous (NumVar) because this is a relaxation.
+    x1 = solver.NumVar(0.0, infinity, 'x1')
+    x2 = solver.NumVar(0.0, infinity, 'x2')
+    x3 = solver.NumVar(0.0, infinity, 'x3')
+    x4 = solver.NumVar(0.0, infinity, 'x4')
+    variables = {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4}
+
+    # Add original problem constraints
+    solver.Add(2 * x1 + 4 * x2 - 3 * x3 + 2 * x4 <= 3)
+    solver.Add(-x1 - 5 * x2 + 3 * x3 - 4 * x4 <= 11)
+    solver.Add(5 * x1 + 3 * x2 + 2 * x3 + x4 <= 7)
+    solver.Add(-5 * x1 - 5 * x3 + 6 * x4 <= 5)
+
+    # Add the specific branching constraints for this subproblem
+    for var, bound in branching_constraints.items():
+        var_name, type = var.split('_')  # e.g., 'x3', 'upper'
+        if type == 'upper':
+            solver.Add(variables[var_name] <= bound)
+        elif type == 'lower':
+            solver.Add(variables[var_name] >= bound)
+
+    # Define the objective function
+    solver.Minimize(3 * x1 - 5 * x2 + 7 * x3 - 10 * x4)
+
+    # Solve the LP
+    status = solver.Solve()
+
+    if status == pywraplp.Solver.OPTIMAL:
+        solution_vars = {
+            'x1': x1.solution_value(),
+            'x2': x2.solution_value(),
+            'x3': x3.solution_value(),
+            'x4': x4.solution_value()
+        }
+        return status, solver.Objective().Value(), solution_vars
+    else:
+        # Return infeasible or other non-optimal status
+        return status, None, None
+
+
+def manual_branch_and_bound():
+ 
+    # Use a list as a stack (LIFO) for depth-first search
+    node_stack = [{'constraints': {}, 'level': 0}]  # Start with the root node (no extra constraints)
+
+    best_objective = float('inf')
+    best_solution = None
+
+    iteration_count = 0
+    TOLERANCE = 1e-6  # Tolerance for checking if a float is an integer
+
+    print("--- Starting Manual Branch & Bound ---")
+
+    while node_stack:
+        iteration_count += 1
+        current_node = node_stack.pop()
+        current_constraints = current_node['constraints']
+        level = current_node['level']
+
+        indent = "  " * level
+        print(f"\n{indent}Node {iteration_count}: Lvl {level}, Constraints: {current_constraints}")
+
+        # 1. Solve the LP relaxation for the current node
+        status, obj_val, sol_vars = solve_lp_relaxation(current_constraints)
+
+        # 2. Bounding (Fathoming/Pruning)
+        if status != pywraplp.Solver.OPTIMAL:
+            print(f"{indent} -> Pruned (Infeasible)")
+            continue
+
+        if obj_val >= best_objective:
+            print(f"{indent} -> Pruned (Bound >= {best_objective:.2f})")
+            continue
+
+        print(f"{indent} -> Relaxed Sol: Obj={obj_val:.2f}, x3={sol_vars['x3']:.2f}, x4={sol_vars['x4']:.2f}")
+
+        # 3. Check for Integer Feasibility
+        is_integer_feasible = True
+        fractional_var_name = None
+
+        for var in ['x3', 'x4']:  # The variables required to be integers
+            if abs(sol_vars[var] - round(sol_vars[var])) > TOLERANCE:
+                is_integer_feasible = False
+                fractional_var_name = var
+                break  # Branch on the first fractional variable found
+
+        if is_integer_feasible:
+            # We found a valid integer solution!
+            print(f"{indent} -> Found an Integer Solution! Obj={obj_val:.2f}")
+            if obj_val < best_objective:
+                print(f"{indent}    -> This is the new best solution!")
+                best_objective = obj_val
+                best_solution = sol_vars
+            # Prune this branch as we can't do better from here
+            continue
+
+        # 4. Branching
+        else:
+            branch_val = sol_vars[fractional_var_name]
+            print(f"{indent} -> Branching on {fractional_var_name} = {branch_val:.2f}")
+
+            # Create two new subproblems and add them to the stack
+            # Branch 1: var >= ceil(value)
+            constraints2 = current_constraints.copy()
+            constraints2[f'{fractional_var_name}_lower'] = math.ceil(branch_val)
+            node_stack.append({'constraints': constraints2, 'level': level + 1})
+
+            # Branch 2: var <= floor(value)
+            constraints1 = current_constraints.copy()
+            constraints1[f'{fractional_var_name}_upper'] = math.floor(branch_val)
+            node_stack.append({'constraints': constraints1, 'level': level + 1})
+
+    print("\n--- Branch & Bound Finished ---")
+    print(f"Completed in {iteration_count} iterations.")
+
+    return best_objective, best_solution
+
+
+if __name__ == '__main__':
+    final_objective, final_solution = manual_branch_and_bound()
+
+    if final_solution:
+        print("\n Optimal Solution Found:")
+        print(f"Objective Value = {final_objective:.4f}")
+        for var, val in final_solution.items():
+            # Rounding for clean display of integer vars
+            if var in ['x3', 'x4']:
+                print(f"{var} = {round(val):.4f}")
+            else:
+                print(f"{var} = {val:.4f}")
+    else:
+        print("\n No optimal solution found.")
