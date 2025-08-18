@@ -1,0 +1,135 @@
+from ortools.linear_solver import pywraplp
+from optimization import solve_integer_program
+
+
+if __name__ == '__main__':
+
+
+    # solve_integer_program()
+
+    # Create the linear solver with the GLOP backend.
+    solver = pywraplp.Solver.CreateSolver('GLOP')
+    if not solver:
+        print("Could not create solver GLOP")
+
+
+    # Nodes
+    n = 7
+
+    # Cost matrix
+    # Using float('inf') for int.MaxValue to represent non-existent/infinite cost paths
+    costs = [
+        [float('inf'), 21, 32, 43, 50, 25, 34],
+        [21, float('inf'), 10, 8, 20, 36, 72],
+        [32, 10, float('inf'), 56, 24, 18, 27],
+        [43, 8, 56, float('inf'), 40, 11, 31],
+        [50, 20, 24, 40, float('inf'), 23, 80],
+        [25, 36, 18, 11, 23, float('inf'), 60],
+        [34, 72, 27, 31, 80, 60, float('inf')],
+    ]
+
+    # Create variables x_ij
+    # Using a list of lists for x
+    # Alternatively, a dictionary of dictionaries could be used: x = {}
+    x = [[None for _ in range(n)] for _ in range(n)]
+
+    for i in range(n):
+        # if i not in x: # For dictionary approach
+        # x[i] = {} # For dictionary approach
+        for j in range(n):
+            # Variables are typically 0-1 for TSP, but original used 0 to int.MaxValue
+            # If these are meant to be binary (part of a tour or not), upper bound should be 1.
+            # For a standard TSP LP relaxation, x_ij are binary (0 or 1).
+            # The original C# code had int.MaxValue as the upper bound,
+            # which means these are continuous variables in the LP relaxation.
+            # If integrality is desired later (e.g. for MIP), use MakeBoolVar or set upper bound to 1.
+            if i == j:  # No self-loops x_ii = 0
+                x[i][j] = solver.NumVar(0, 0, f"x_{i}_{j}")  # Force x_ii to 0
+            else:
+                x[i][j] = solver.NumVar(0, solver.infinity(), f"x_{i}_{j}")
+
+    print(f"Number of variables = {solver.NumVariables()}")
+
+    # Create the constraints
+    # Sum over j of x_ij = 1 for each i (exactly one outgoing edge)
+    for i in range(n):
+        constraint1 = solver.Constraint(1, 1, f"constraint1_row_{i}")
+        for j in range(n):
+            if i != j:
+                constraint1.SetCoefficient(x[i][j], 1)
+
+    # Sum over i of x_ij = 1 for each j (exactly one incoming edge)
+    for j in range(n):
+        constraint2 = solver.Constraint(1, 1, f"constraint2_col_{j}")
+        for i in range(n):
+            if i != j:
+                constraint2.SetCoefficient(x[i][j], 1)
+
+
+    # Subtour Elimination Constraints (1)
+    # This constraint type is often: sum_{i in S, j not in S} x_ij >= 1
+    # For the first constraint, it appears to be a sum over specific arcs.
+    # Let's define S = {0, 2} and a subset of V\S as T = {1, 3, 4}.
+    # The constraint is sum_{i in S, j in T} x_ij >= 1 (or some other set definition)
+    # It means at least one of the specified edges must be used.
+
+    subtour_el_cons1_1 = solver.Constraint(1, solver.infinity(), "Subtour_Elimination_Constraint_1_1")
+    subtour_el_cons1_1.SetCoefficient(x[0][1], 1)
+    subtour_el_cons1_1.SetCoefficient(x[0][3], 1)
+    subtour_el_cons1_1.SetCoefficient(x[0][4], 1)
+    subtour_el_cons1_1.SetCoefficient(x[2][1], 1)
+    subtour_el_cons1_1.SetCoefficient(x[2][3], 1)
+    subtour_el_cons1_1.SetCoefficient(x[2][4], 1)
+
+    # For the second constraint, it appears to be a sum over different specific arcs.
+    # Let's define S' = {1, 3, 4} and a subset of V\S' as T' = {0, 2}.
+    # The constraint is sum_{i in S', j in T'} x_ij >= 1
+    subtour_el_cons1_2 = solver.Constraint(1, solver.infinity(), "Subtour_Elimination_Constraint_1_2")
+    subtour_el_cons1_2.SetCoefficient(x[1][0], 1)
+    subtour_el_cons1_2.SetCoefficient(x[1][2], 1)
+    subtour_el_cons1_2.SetCoefficient(x[4][0], 1)
+    subtour_el_cons1_2.SetCoefficient(x[4][2], 1)
+    subtour_el_cons1_2.SetCoefficient(x[3][0], 1)
+    subtour_el_cons1_2.SetCoefficient(x[3][2], 1)
+
+    print("Added 2 specific subtour elimination constraints.")
+
+    # Create the objective function
+    objective = solver.Objective()
+    for i in range(n):
+        for j in range(n):
+            if i != j:  # Costs are only for paths between different nodes
+                if costs[i][j] != float('inf'):  # Only add if path exists/is not infinitely costly
+                    objective.SetCoefficient(x[i][j], costs[i][j])
+    objective.SetMinimization()
+
+    # Print model (optional)
+    print("Model LP format:\n", solver.ExportModelAsLpFormat(False))
+
+    # Solve
+    status = solver.Solve()
+
+    print(f"Solve status: {status}")  # status will be an integer
+    # You can compare with pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE etc.
+    # For example:
+    if status == pywraplp.Solver.OPTIMAL:
+        print("Solution is OPTIMAL.")
+    elif status == pywraplp.Solver.FEASIBLE:
+        print("Solution is FEASIBLE.")
+    else:
+        print("Solver did not find an optimal or feasible solution.")
+
+    # Print solution
+    if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+        print(f"Min costs: {round(solver.Objective().Value())}")
+        print("Solution (non-zero variables):")
+        for i in range(n):
+            for j in range(n):
+                if i != j:
+                    # Only print variables that are part of the solution (e.g., > 0.5 for binary interpretation)
+                    if x[i][j].solution_value() > 1e-6:  # Check for non-zero/positive values
+                        print(f"{x[i][j].name()}: {x[i][j].solution_value()}")
+    else:
+        print("No solution found.")
+
+
