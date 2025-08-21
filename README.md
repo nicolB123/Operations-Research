@@ -1,3 +1,2 @@
 # Operations-Research
-Algorithmen (Code) der Veranstaltung OR
-TBD genetic 2opt suk
+Algorithmen in Code zu den Übungen der Veranstaltung OR
