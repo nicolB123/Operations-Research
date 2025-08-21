@@ -1,0 +1,134 @@
+import math
+
+# Node mapping for clarity: 0->1, 1->2, 2->3, 3->4, 4->5
+dist_matrix = [
+    [0, 3, 20, 10, 7],  # Node 1
+    [3, 0, 4, 7, 1],   # Node 2
+    [20, 4, 0, 8, 2],  # Node 3
+    [10, 7, 8, 0, 7],  # Node 4
+    [7, 1, 2, 7, 0]   # Node 5
+]
+
+def calculate_tour_length(tour, matrix):
+    total_distance = 0
+    for i in range(len(tour)):
+        # Get distance from current node to the next, wrapping around at the end
+        from_node = tour[i]
+        to_node = tour[(i + 1) % len(tour)]
+        total_distance += matrix[from_node][to_node]
+    return total_distance
+
+
+def nearest_insertion(matrix):
+    start_node = 0
+    num_nodes = len(matrix)
+
+    # Start the tour with the starting node
+    tour = [start_node]
+    nodes_to_visit = set(range(num_nodes))
+    nodes_to_visit.remove(start_node)
+
+    while nodes_to_visit:
+        best_node_to_insert = -1
+        min_insertion_cost = float('inf')
+        best_insert_position = -1
+
+        # Find the node k not in the tour that is closest to any node i in the tour
+        # This is a common variant; another is to choose the farthest node.
+        # Let's find the best node k and its insertion position simultaneously.
+
+        for node_k in nodes_to_visit:
+            # For each unvisited node, find the best place to insert it in the current tour
+            for i in range(len(tour)):
+                node_i = tour[i]
+                node_j = tour[(i + 1) % len(tour)]
+
+                # Cost of inserting k between i and j: dist(i,k) + dist(k,j) - dist(i,j)
+                cost = matrix[node_i][node_k] + matrix[node_k][node_j] - matrix[node_i][node_j]
+
+                if cost < min_insertion_cost:
+                    min_insertion_cost = cost
+                    best_node_to_insert = node_k
+                    best_insert_position = i + 1
+
+        # Insert the best node at the best position
+        tour.insert(best_insert_position, best_node_to_insert)
+        nodes_to_visit.remove(best_node_to_insert)
+
+    return tour, calculate_tour_length(tour, matrix)
+
+
+def nearest_neighbor(matrix):
+
+    start_node = 0
+    num_nodes = len(matrix)
+    tour = [start_node]
+    unvisited = set(range(num_nodes))
+    unvisited.remove(start_node)
+
+    current_node = start_node
+    while unvisited:
+        nearest_node = min(unvisited, key=lambda node: matrix[current_node][node])
+        tour.append(nearest_node)
+        unvisited.remove(nearest_node)
+        current_node = nearest_node
+
+    return tour, calculate_tour_length(tour, matrix)
+
+
+def two_opt(matrix, initial_tour):
+
+    best_tour = initial_tour
+    improvement_found = True
+
+    while improvement_found:
+        improvement_found = False
+        for i in range(len(best_tour) - 1):
+            for j in range(i + 2, len(best_tour)):
+                # Ensure the nodes are not adjacent
+                # For a tour, we need to handle the wrap-around edge
+                node1, node2 = best_tour[i], best_tour[i + 1]
+                node3, node4 = best_tour[j], best_tour[(j + 1) % len(best_tour)]
+
+                # Original cost of the two edges
+                current_cost = matrix[node1][node2] + matrix[node3][node4]
+                # Cost of the new edges if we swap
+                new_cost = matrix[node1][node3] + matrix[node2][node4]
+
+                if new_cost < current_cost:
+                    # An improvement is found, perform the swap
+                    # This is done by reversing the segment between i+1 and j
+                    new_tour = best_tour[:i + 1] + best_tour[j:i:-1] + best_tour[j + 1:]
+                    best_tour = new_tour
+                    improvement_found = True
+                    # Break to restart the search from the beginning of the new tour
+                    break
+            if improvement_found:
+                break
+
+    return best_tour, calculate_tour_length(best_tour, matrix)
+
+
+if __name__ == "__main__":
+
+    print("Verfahren der sukzessiven Einbeziehung (Nearest Insertion)")
+    insertion_tour_idx, insertion_len = nearest_insertion(dist_matrix)
+    insertion_tour_labels = [node + 1 for node in insertion_tour_idx]
+    print(f"Gefundene Rundreise: {' -> '.join(map(str, insertion_tour_labels))} -> {insertion_tour_labels[0]}")
+    print(f"Länge der Rundreise: {insertion_len}\n")
+
+
+    print("Verbesserung mit 2-opt")
+    # First, get the tour from Nearest Neighbor
+    nn_tour_idx, nn_len = nearest_neighbor(dist_matrix)
+    nn_tour_labels = [node + 1 for node in nn_tour_idx]
+    print("Start-Rundreise (aus Nächster Nachbar):")
+    print(f"  Route: {' -> '.join(map(str, nn_tour_labels))} -> {nn_tour_labels[0]}")
+    print(f"  Länge: {nn_len}")
+
+    # Now, improve it with 2-opt
+    two_opt_tour_idx, two_opt_len = two_opt(dist_matrix, nn_tour_idx)
+    two_opt_tour_labels = [node + 1 for node in two_opt_tour_idx]
+    print("\nVerbesserte Rundreise (nach 2-opt):")
+    print(f"  Route: {' -> '.join(map(str, two_opt_tour_labels))} -> {two_opt_tour_labels[0]}")
+    print(f"  Länge: {two_opt_len}")
