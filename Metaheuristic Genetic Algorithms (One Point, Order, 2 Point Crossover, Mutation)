@@ -1,0 +1,134 @@
+import random
+
+# --- Parent Tours ---
+# Note: The problem uses 1-based indexing for cities, so we'll use it here too.
+parent1 = [2, 1, 7, 6, 3, 4, 5]
+parent2 = [1, 5, 6, 7, 4, 3, 2]
+
+print(f"Parent 1: {parent1}")
+print(f"Parent 2: {parent2}\n")
+
+
+def one_point_crossover_repaired(p1, p2, crossover_point):
+    cp = crossover_point - 1  # Convert to 0-based index
+
+    # Create initial children by swapping tails
+    child1_raw = p1[:cp] + p2[cp:]
+    child2_raw = p2[:cp] + p1[cp:]
+
+    def repair(child_raw, reference_parent):
+        # Repairs a child by filling duplicates with missing elements
+        # Find what's missing
+        missing = [gene for gene in reference_parent if gene not in child_raw]
+
+        # Find duplicates and their indices
+        seen = set()
+        duplicates = []
+        for i, gene in enumerate(child_raw):
+            if gene in seen:
+                duplicates.append(i)
+            else:
+                seen.add(gene)
+
+        # Replace duplicates with missing elements
+        repaired_child = list(child_raw)
+        for i, idx in enumerate(duplicates):
+            repaired_child[idx] = missing[i]
+
+        return repaired_child
+
+    child1 = repair(child1_raw, p1)
+    child2 = repair(child2_raw, p2)
+
+    return child1, child2
+
+
+def order_crossover(p1, p2, crossover_point):
+
+    cp = crossover_point - 1  # Convert to 0-based index
+    size = len(p1)
+
+    def create_child(p_main, p_secondary):
+        child = [None] * size
+
+        # 1. Copy the segment from the main parent
+        segment = p_main[cp:]
+        child[cp:] = segment
+
+        # 2. Fill in the rest from the secondary parent
+        fill_pos = 0
+        for gene in p_secondary:
+            if gene not in segment:
+                # Find the next empty spot in the child
+                while child[fill_pos] is not None:
+                    fill_pos += 1
+                child[fill_pos] = gene
+        return child
+
+    child1 = create_child(parent1, parent2)
+    child2 = create_child(parent2, parent1)
+    return child1, child2
+
+
+def two_point_order_crossover(p1, p2, cp1, cp2):
+
+    cp_start, cp_end = cp1 - 1, cp2 - 1  # Convert to 0-based
+    size = len(p1)
+
+    def create_child(p_main, p_secondary):
+        child = [None] * size
+
+        # 1. Copy the segment from the main parent
+        segment = p_main[cp_start:cp_end]
+        child[cp_start:cp_end] = segment
+
+        # 2. Fill in the rest from the secondary parent
+        fill_pos = cp_end % size
+        for gene in p_secondary:
+            if gene not in segment:
+                child[fill_pos] = gene
+                fill_pos = (fill_pos + 1) % size
+        return child
+
+    child1 = create_child(parent1, parent2)
+    child2 = create_child(parent2, parent1)
+    return child1, child2
+
+
+def swap_mutation(tour):
+
+    mutated_tour = list(tour)
+    size = len(mutated_tour)
+
+    # Select two distinct random indices
+    idx1, idx2 = random.sample(range(size), 2)
+
+    # Swap the elements at these indices
+    mutated_tour[idx1], mutated_tour[idx2] = mutated_tour[idx2], mutated_tour[idx1]
+
+    return mutated_tour, (idx1 + 1, idx2 + 1)  # Return 1-based indices for clarity
+
+
+
+
+if __name__ == "__main__":
+
+    print("One-Point Crossover at position 4")
+    child1a, child2a = one_point_crossover_repaired(parent1, parent2, 4)
+    print(f"Child 1: {child1a}")
+    print(f"Child 2: {child2a}\n")
+
+    print("Order Crossover at position 3")
+    child1b, child2b = order_crossover(parent1, parent2, 3)
+    print(f"Child 1: {child1b}")
+    print(f"Child 2: {child2b}\n")
+
+    print("Two-Point Order Crossover at positions 2 and 5")
+    child1c, child2c = two_point_order_crossover(parent1, parent2, 2, 5)
+    print(f"Child 1: {child1c}")
+    print(f"Child 2: {child2c}\n")
+
+    print("Example of a Mutation")
+    mutated_p1, swapped_indices = swap_mutation(parent1)
+    print(f"Original Parent 1:  {parent1}")
+    print(f"Mutated Parent 1:   {mutated_p1} (swapped positions {swapped_indices[0]} and {swapped_indices[1]})")
